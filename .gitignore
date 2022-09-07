@@ -132,4 +132,4 @@ dmypy.json
 .temps/
 
 # voices directory
-.voices/
+voices/
