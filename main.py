@@ -84,6 +84,7 @@ if __name__ == '__main__':
                 os.mkdir(temps_dir)
 
             conn = sqlite3.connect(voicepack_path)
+            cur = conn.cursor()
             logger.prt('info', 'Connected to database', 2)
 
             lines = open(dictionaries_path, encoding=encoding).readlines()
@@ -153,26 +154,30 @@ if __name__ == '__main__':
                 audio.export(temps_dir + 'temps.wav', format='wav')
                 logger.prt('sucess', 'step 7: export', 2)
 
+                # DB
+                cur.execute(
+                    'SELECT data FROM ' + schema + ' WHERE kt=?',
+                    (word,))
+
+                get_data = cur.fetchone()
+                if not get_data:
+                    a = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
+                    y = np.array(a.get_array_of_samples())
+                    if a.channels == 2:
+                        y = y.reshape((-1, 2))
+
+                    sql = 'INSERT INTO ' + schema + '''(kt,data)
+                              VALUES(?,?) '''
+                    cur = conn.cursor()
+                    task = (word, y)
+                    cur.execute(sql, task)
+                    conn.commit()
+
+                    logger.prt('sucess', 'added to database', 1)
+                else:
+                    logger.prt('sucess', 'already present', 2)
+
                 sys.exit(0)
-
-                # on stock en db
-
-                    # a = AudioSegment.from_mp3(music_path)
-                    # y = np.array(a.get_array_of_samples())
-                    # if a.channels == 2:
-                    #     y = y.reshape((-1, 2))
-
-                    # sql = ''' INSERT INTO ''' + schema + '''(kt,data)
-                    #           VALUES(?,?) '''
-                    # cur = conn.cursor()
-                    # task = (word, y)
-                    # cur.execute(sql, task)
-                    # conn.commit()
-
-                    # si existe on écrase
-
-                    #! on créé
-
 
             if os.path.isdir(temps_dir):
                 logger.prt('info', 'Creation of the temps folder', 2)
