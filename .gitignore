@@ -130,3 +130,6 @@ dmypy.json
 
 # temps directory
 .temps/
+
+# voices directory
+.voices/
