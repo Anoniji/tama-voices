@@ -51,8 +51,7 @@ def convert_array(text):
 def check_data(db_table, word):
     global cur
     try:
-        check = cur.execute(
-            'SELECT id FROM ' + db_table + ' WHERE kt=?',
+        check = cur.execute(f'SELECT id FROM {db_table} WHERE kt=?',
             (word,))
 
         if not check.fetchall():
@@ -172,18 +171,17 @@ if __name__ == '__main__':
 
                     # DB
                     try:
-                        cur.execute(
-                            'SELECT data FROM ' + db_table + ' WHERE kt=?',
+                        cur.execute(f'SELECT data FROM {db_table} WHERE kt=?',
                             (word,))
 
                     except Exception:
-                        create = '''
-                            CREATE TABLE ''' + db_table + ''' (
+                        create = f'''
+                            CREATE TABLE {db_table} (
                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                                 "kt" TEXT NOT NULL,
                                 "data" BLOB NOT NULL
                             );
-                            CREATE INDEX ''' + db_table + '''_kt_IDX ON ''' + db_table + ''' (kt);
+                            CREATE INDEX {db_table}_kt_IDX ON {db_table} (kt);
                         '''
 
                         cur.executescript(create)
@@ -196,7 +194,7 @@ if __name__ == '__main__':
                         if audio.channels == 2:
                             y = y.reshape((-1, 2))
 
-                        sql = 'INSERT INTO ' + db_table + '''(kt,data)
+                        sql = f'''INSERT INTO {db_table}(kt,data)
                                   VALUES(?,?) '''
                         cur = conn.cursor()
                         task = (word, y)
