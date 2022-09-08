@@ -16,8 +16,10 @@ import sys
 import argparse
 import shutil
 import sqlite3
+
 import logging
 from logger import Logger
+from progress.bar import Bar
 
 from gtts import gTTS
 from pydub import AudioSegment, effects
@@ -91,9 +93,8 @@ if __name__ == '__main__':
         lines_len = len(lines)
         logger.prt('info', 'Dictionary ' + lang + ' loaded (' + str(lines_len) + ' words)', 1)
 
-        index = 0
+        bar = Bar('Processing', max=lines_len)
         for word in lines:
-            index += 1
             word = word.upper().strip()
             schema = word[0]
 
@@ -168,7 +169,8 @@ if __name__ == '__main__':
             else:
                 logger.prt('warning', 'step 6: already present', 2)
 
-            sys.exit(0)
+            bar.next()            
+        bar.finish()
 
         if os.path.isdir(temps_dir):
             logger.prt('info', 'Deletion of the temps folder', 2)
