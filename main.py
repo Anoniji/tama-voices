@@ -124,17 +124,14 @@ if __name__ == '__main__':
                             array.reverse()
 
                 audio = audio._spawn(lst[cnt[0]:-cnt[1]])
-                logger.prt('sucess', 'step 2: clear', 2)
-
-                # Export
                 audio.export(temps_dir + 'temps.wav', format='wav')
-                logger.prt('sucess', 'step 3: export', 2)
+                logger.prt('sucess', 'step 2: clear', 2)
 
                 # Change rate
                 data, samplerate = sf.read(temps_dir + 'temps.wav')
                 samplerate = int(samplerate * vo_rate[lang])
                 sf.write(temps_dir + 'temps.wav', data, samplerate)
-                logger.prt('sucess', 'step 4: change rate', 2)
+                logger.prt('sucess', 'step 3: change rate', 2)
 
                 # Change octave
                 sound = AudioSegment.from_file(temps_dir + 'temps.wav', format='wav')
@@ -143,12 +140,12 @@ if __name__ == '__main__':
                 n_sound = sound._spawn(sound.raw_data, overrides={'frame_rate': f_rate})
                 n_sound = n_sound.set_frame_rate(rate)
                 n_sound.export(temps_dir + 'temps.mp3', format='mp3')
-                logger.prt('sucess', 'step 5: change octave', 2)
+                logger.prt('sucess', 'step 4: change octave', 2)
 
                 # Normalize
                 audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
                 audio = effects.normalize(audio)
-                logger.prt('sucess', 'step 6: normalize', 2)
+                logger.prt('sucess', 'step 5: normalize', 2)
 
                 # DB
                 cur.execute(
@@ -156,9 +153,8 @@ if __name__ == '__main__':
                     (word,))
 
                 if not cur.fetchone():
-                    a = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
                     y = np.array(audio.get_array_of_samples())
-                    if a.channels == 2:
+                    if audio.channels == 2:
                         y = y.reshape((-1, 2))
 
                     sql = 'INSERT INTO ' + schema + '''(kt,data)
@@ -168,18 +164,18 @@ if __name__ == '__main__':
                     cur.execute(sql, task)
                     conn.commit()
 
-                    logger.prt('sucess', 'step 7: added to database', 1)
+                    logger.prt('sucess', 'step 6: added to database', 1)
                 else:
-                    logger.prt('warning', 'step 7: already present', 2)
+                    logger.prt('warning', 'step 6: already present', 2)
 
                 sys.exit(0)
 
             if os.path.isdir(temps_dir):
-                logger.prt('info', 'Creation of the temps folder', 2)
+                logger.prt('info', 'Deletion of the temps folder', 2)
                 shutil.rmtree(temps_dir)
 
         else:
-            logger.prt('info', 'Dictionary not found')
+            logger.prt('error', 'Dictionary not found')
 
     else:
-        logger.prt('info', 'Please set --lang parameter')
+        logger.prt('error', 'Please set --lang parameter')
