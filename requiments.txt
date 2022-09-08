@@ -1,7 +1,7 @@
-argparse
-gTTS
-gTTS-token
-progress
-pydub
-SoundFile
-numpy
+cx-Freeze==6.4.2
+gTTS==2.2.2
+gTTS-token==1.1.4
+progress==1.6
+pydub==0.24.1
+SoundFile==0.10.3.post1
+numpy==1.21.1
