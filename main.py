@@ -150,19 +150,14 @@ if __name__ == '__main__':
                 audio = effects.normalize(audio)
                 logger.prt('sucess', 'step 6: normalize', 2)
 
-                # Export
-                audio.export(temps_dir + 'temps.wav', format='wav')
-                logger.prt('sucess', 'step 7: export', 2)
-
                 # DB
                 cur.execute(
                     'SELECT data FROM ' + schema + ' WHERE kt=?',
                     (word,))
 
-                get_data = cur.fetchone()
-                if not get_data:
+                if not cur.fetchone():
                     a = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
-                    y = np.array(a.get_array_of_samples())
+                    y = np.array(audio.get_array_of_samples())
                     if a.channels == 2:
                         y = y.reshape((-1, 2))
 
@@ -173,9 +168,9 @@ if __name__ == '__main__':
                     cur.execute(sql, task)
                     conn.commit()
 
-                    logger.prt('sucess', 'added to database', 1)
+                    logger.prt('sucess', 'step 7: added to database', 1)
                 else:
-                    logger.prt('sucess', 'already present', 2)
+                    logger.prt('warning', 'step 7: already present', 2)
 
                 sys.exit(0)
 
