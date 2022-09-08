@@ -41,17 +41,15 @@ setup(
 )
 
 
-if not os.path.isdir('.\\.build\\lib\\_soundfile_data\\'):
-    os.mkdir('.\\.build\\lib\\_soundfile_data\\')
+if not os.path.isdir('.\\build\\lib\\_soundfile_data\\'):
+    os.mkdir('.\\build\\lib\\_soundfile_data\\')
 
 shutil.copyfile(
     site.getsitepackages()[-1] + '\\_soundfile_data\\libsndfile64bit.dll',
-    '.\\.build\\lib\\_soundfile_data\\libsndfile64bit.dll'
+    '.\\build\\lib\\_soundfile_data\\libsndfile64bit.dll'
 )
 
 shutil.copytree(
     '.\\dictionaries',
-    '.\\.build\\dictionaries'
+    '.\\build\\dictionaries'
 )
-
-print(site.getsitepackages()[-1] + '\\_soundfile_data\\libsndfile64bit.dll')
