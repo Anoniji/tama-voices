@@ -14,6 +14,7 @@ aspell -d en dump master | aspell -l en expand > en.txt
 import os
 import sys
 import argparse
+import time
 import shutil
 import sqlite3
 import io
@@ -47,6 +48,22 @@ def convert_array(text):
     return np.load(out)
 
 
+def check_data(db_table, word):
+    global cur
+    try:
+        check = cur.execute(
+            'SELECT id FROM ' + db_table + ' WHERE kt=?',
+            (word,))
+
+        if not check.fetchall():
+            return False
+
+        return True
+    except Exception as e:
+        print('e>', e)
+        return False
+
+
 sqlite3.register_adapter(np.ndarray, adapt_array)
 sqlite3.register_converter('array', convert_array)
 
@@ -58,11 +75,13 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--encoding', type=str, default='utf-8')
     parser.add_argument('-o', '--octaves', type=float, default='1.00')
     parser.add_argument('-r', '--rate', type=float, default='1.00')
+    parser.add_argument('-s', '--sleep', type=float, default='1.00')
     args, unknown = parser.parse_known_args()
     lang = args.lang
     encoding = args.encoding
     octaves = args.octaves
     vo_rate = args.rate
+    loop_sleep = args.sleep
 
     # init logger
     logger = Logger()
@@ -103,90 +122,93 @@ if __name__ == '__main__':
                 db_table = word[0]
 
                 logger.prt('info', 'db_table: ' + db_table + ' | words: ' + word, 3)
+                if not check_data(db_table, word):
+                    # TTS
+                    tts = gTTS(word, lang=lang)
+                    tts.save(temps_dir + 'temps.mp3')
+                    logger.prt('sucess', 'step 1: generate', 2)
 
-                # TTS
-                tts = gTTS(word, lang=lang)
-                tts.save(temps_dir + 'temps.mp3')
-                logger.prt('sucess', 'step 1: generate', 2)
+                    # Clear
+                    audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
+                    lst = np.array(audio.get_array_of_samples())
 
-                # Clear
-                audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
-                lst = np.array(audio.get_array_of_samples())
+                    cnt, stp, array = ([0, 0], [False, False], [])
+                    for point in lst:
+                        array.append(point)
 
-                cnt, stp, array = ([0, 0], [False, False], [])
-                for point in lst:
-                    array.append(point)
+                    for pos in range(0, 2):
+                        for point in array:
+                            if not stp[pos] and point >= s_strip[1] and point <= s_strip[0]:
+                                cnt[pos] = cnt[pos] + 1
 
-                for pos in range(0, 2):
-                    for point in array:
-                        if not stp[pos] and point >= s_strip[1] and point <= s_strip[0]:
-                            cnt[pos] = cnt[pos] + 1
+                            elif not stp[pos] and point < s_strip[1] or point > s_strip[0]:
+                                stp[pos] = True
 
-                        elif not stp[pos] and point < s_strip[1] or point > s_strip[0]:
-                            stp[pos] = True
+                            else:
+                                array.reverse()
 
-                        else:
-                            array.reverse()
+                    audio = audio._spawn(lst[cnt[0]:-cnt[1]])
+                    audio.export(temps_dir + 'temps.wav', format='wav')
+                    logger.prt('sucess', 'step 2: clear', 2)
 
-                audio = audio._spawn(lst[cnt[0]:-cnt[1]])
-                audio.export(temps_dir + 'temps.wav', format='wav')
-                logger.prt('sucess', 'step 2: clear', 2)
+                    # Change rate
+                    data, samplerate = sf.read(temps_dir + 'temps.wav')
+                    samplerate = int(samplerate * vo_rate)
+                    sf.write(temps_dir + 'temps.wav', data, samplerate)
+                    logger.prt('sucess', 'step 3: change rate', 2)
 
-                # Change rate
-                data, samplerate = sf.read(temps_dir + 'temps.wav')
-                samplerate = int(samplerate * vo_rate)
-                sf.write(temps_dir + 'temps.wav', data, samplerate)
-                logger.prt('sucess', 'step 3: change rate', 2)
+                    # Change octave
+                    sound = AudioSegment.from_file(temps_dir + 'temps.wav', format='wav')
+                    data, rate = sf.read(temps_dir + 'temps.wav')
+                    f_rate = int(sound.frame_rate * (2.0 ** octaves))
+                    n_sound = sound._spawn(sound.raw_data, overrides={'frame_rate': f_rate})
+                    n_sound = n_sound.set_frame_rate(rate)
+                    n_sound.export(temps_dir + 'temps.mp3', format='mp3')
+                    logger.prt('sucess', 'step 4: change octave', 2)
 
-                # Change octave
-                sound = AudioSegment.from_file(temps_dir + 'temps.wav', format='wav')
-                data, rate = sf.read(temps_dir + 'temps.wav')
-                f_rate = int(sound.frame_rate * (2.0 ** octaves))
-                n_sound = sound._spawn(sound.raw_data, overrides={'frame_rate': f_rate})
-                n_sound = n_sound.set_frame_rate(rate)
-                n_sound.export(temps_dir + 'temps.mp3', format='mp3')
-                logger.prt('sucess', 'step 4: change octave', 2)
+                    # Normalize
+                    audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
+                    audio = effects.normalize(audio)
+                    logger.prt('sucess', 'step 5: normalize', 2)
 
-                # Normalize
-                audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
-                audio = effects.normalize(audio)
-                logger.prt('sucess', 'step 5: normalize', 2)
+                    # DB
+                    try:
+                        cur.execute(
+                            'SELECT data FROM ' + db_table + ' WHERE kt=?',
+                            (word,))
 
-                # DB
-                try:
-                    cur.execute(
-                        'SELECT data FROM ' + db_table + ' WHERE kt=?',
-                        (word,))
+                    except Exception:
+                        create = '''
+                    CREATE TABLE ''' + db_table + ''' (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        "kt" TEXT NOT NULL,
+                        "data" BLOB NOT NULL
+                    );
+                    CREATE INDEX ''' + db_table + '''_kt_IDX ON ''' + db_table + ''' (kt);
+                            '''
 
-                except Exception:
-                    create = '''
-                CREATE TABLE ''' + db_table + ''' (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    "kt" TEXT NOT NULL,
-                    "data" BLOB NOT NULL
-                );
-                CREATE INDEX ''' + db_table + '''_kt_IDX ON ''' + db_table + ''' (kt);
-                        '''
+                        cur.executescript(create)
+                        conn.commit()
+                        logger.prt(
+                            'sucess', 'step 6: add table "' + db_table + '" into database', 2)
 
-                    cur.executescript(create)
-                    conn.commit()
-                    logger.prt('sucess', 'step 6: add table "' + db_table + '" into database', 2)
+                    if not cur.fetchone():
+                        y = np.array(audio.get_array_of_samples())
+                        if audio.channels == 2:
+                            y = y.reshape((-1, 2))
 
-                if not cur.fetchone():
-                    y = np.array(audio.get_array_of_samples())
-                    if audio.channels == 2:
-                        y = y.reshape((-1, 2))
+                        sql = 'INSERT INTO ' + db_table + '''(kt,data)
+                                  VALUES(?,?) '''
+                        cur = conn.cursor()
+                        task = (word, y)
+                        cur.execute(sql, task)
+                        conn.commit()
 
-                    sql = 'INSERT INTO ' + db_table + '''(kt,data)
-                              VALUES(?,?) '''
-                    cur = conn.cursor()
-                    task = (word, y)
-                    cur.execute(sql, task)
-                    conn.commit()
+                        logger.prt('sucess', 'step 6: added to database', 2)
+                    else:
+                        logger.prt('warning', 'step 6: already present', 2)
 
-                    logger.prt('sucess', 'step 6: added to database', 2)
-                else:
-                    logger.prt('warning', 'step 6: already present', 2)
+                    time.sleep(loop_sleep)
 
                 if '--lv2' not in unknown and '--lv3' not in unknown:
                     bar.next()
