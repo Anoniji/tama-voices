@@ -15,3 +15,25 @@ List of available languages:
 - pt (Portuguese)
 - ru (Russian)
 - zh (Chinese)
+
+## Compilation
+
+_tested with python 3.9.7_
+
+```
+python setup build
+```
+
+## Execution
+
+_in compiled mode_
+
+```
+voicemaker.exe -l {lang}
+```
+
+_by running the script_
+
+```
+python main.py -l {lang} (--lv2: debug) (--lv3: trace)
+```
