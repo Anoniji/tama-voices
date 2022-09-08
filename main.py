@@ -16,6 +16,7 @@ import sys
 import argparse
 import shutil
 import sqlite3
+import io
 
 import logging
 from logger import Logger
@@ -93,88 +94,116 @@ if __name__ == '__main__':
         lines_len = len(lines)
         logger.prt('info', 'Dictionary ' + lang + ' loaded (' + str(lines_len) + ' words)', 1)
 
-        bar = Bar('Processing', max=lines_len)
-        for word in lines:
-            word = word.upper().strip()
-            schema = word[0]
+        if '--lv2' not in unknown and '--lv3' not in unknown:
+            bar = Bar('Processing', max=lines_len)
 
-            logger.prt('info', 'schema: ' + schema + ' | words: ' + word, 3)
+        try:
+            for word in lines:
+                word = word.upper().strip()
+                db_table = word[0]
 
-            # TTS
-            tts = gTTS(word, lang=lang)
-            tts.save(temps_dir + 'temps.mp3')
-            logger.prt('sucess', 'step 1: generate', 2)
+                logger.prt('info', 'db_table: ' + db_table + ' | words: ' + word, 3)
 
-            # Clear
-            audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
-            lst = np.array(audio.get_array_of_samples())
+                # TTS
+                tts = gTTS(word, lang=lang)
+                tts.save(temps_dir + 'temps.mp3')
+                logger.prt('sucess', 'step 1: generate', 2)
 
-            cnt, stp, array = ([0, 0], [False, False], [])
-            for point in lst:
-                array.append(point)
+                # Clear
+                audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
+                lst = np.array(audio.get_array_of_samples())
 
-            for pos in range(0, 2):
-                for point in array:
-                    if not stp[pos] and point >= s_strip[1] and point <= s_strip[0]:
-                        cnt[pos] = cnt[pos] + 1
+                cnt, stp, array = ([0, 0], [False, False], [])
+                for point in lst:
+                    array.append(point)
 
-                    elif not stp[pos] and point < s_strip[1] or point > s_strip[0]:
-                        stp[pos] = True
+                for pos in range(0, 2):
+                    for point in array:
+                        if not stp[pos] and point >= s_strip[1] and point <= s_strip[0]:
+                            cnt[pos] = cnt[pos] + 1
 
-                    else:
-                        array.reverse()
+                        elif not stp[pos] and point < s_strip[1] or point > s_strip[0]:
+                            stp[pos] = True
 
-            audio = audio._spawn(lst[cnt[0]:-cnt[1]])
-            audio.export(temps_dir + 'temps.wav', format='wav')
-            logger.prt('sucess', 'step 2: clear', 2)
+                        else:
+                            array.reverse()
 
-            # Change rate
-            data, samplerate = sf.read(temps_dir + 'temps.wav')
-            samplerate = int(samplerate * vo_rate)
-            sf.write(temps_dir + 'temps.wav', data, samplerate)
-            logger.prt('sucess', 'step 3: change rate', 2)
+                audio = audio._spawn(lst[cnt[0]:-cnt[1]])
+                audio.export(temps_dir + 'temps.wav', format='wav')
+                logger.prt('sucess', 'step 2: clear', 2)
 
-            # Change octave
-            sound = AudioSegment.from_file(temps_dir + 'temps.wav', format='wav')
-            data, rate = sf.read(temps_dir + 'temps.wav')
-            f_rate = int(sound.frame_rate * (2.0 ** octaves))
-            n_sound = sound._spawn(sound.raw_data, overrides={'frame_rate': f_rate})
-            n_sound = n_sound.set_frame_rate(rate)
-            n_sound.export(temps_dir + 'temps.mp3', format='mp3')
-            logger.prt('sucess', 'step 4: change octave', 2)
+                # Change rate
+                data, samplerate = sf.read(temps_dir + 'temps.wav')
+                samplerate = int(samplerate * vo_rate)
+                sf.write(temps_dir + 'temps.wav', data, samplerate)
+                logger.prt('sucess', 'step 3: change rate', 2)
 
-            # Normalize
-            audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
-            audio = effects.normalize(audio)
-            logger.prt('sucess', 'step 5: normalize', 2)
+                # Change octave
+                sound = AudioSegment.from_file(temps_dir + 'temps.wav', format='wav')
+                data, rate = sf.read(temps_dir + 'temps.wav')
+                f_rate = int(sound.frame_rate * (2.0 ** octaves))
+                n_sound = sound._spawn(sound.raw_data, overrides={'frame_rate': f_rate})
+                n_sound = n_sound.set_frame_rate(rate)
+                n_sound.export(temps_dir + 'temps.mp3', format='mp3')
+                logger.prt('sucess', 'step 4: change octave', 2)
 
-            # DB
-            cur.execute(
-                'SELECT data FROM ' + schema + ' WHERE kt=?',
-                (word,))
+                # Normalize
+                audio = AudioSegment.from_mp3(temps_dir + 'temps.mp3')
+                audio = effects.normalize(audio)
+                logger.prt('sucess', 'step 5: normalize', 2)
 
-            if not cur.fetchone():
-                y = np.array(audio.get_array_of_samples())
-                if audio.channels == 2:
-                    y = y.reshape((-1, 2))
+                # DB
+                try:
+                    cur.execute(
+                        'SELECT data FROM ' + db_table + ' WHERE kt=?',
+                        (word,))
 
-                sql = 'INSERT INTO ' + schema + '''(kt,data)
-                          VALUES(?,?) '''
-                cur = conn.cursor()
-                task = (word, y)
-                cur.execute(sql, task)
-                conn.commit()
+                except Exception:
+                    create = '''
+                CREATE TABLE ''' + db_table + ''' (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    "kt" TEXT NOT NULL,
+                    "data" BLOB NOT NULL
+                );
+                CREATE INDEX ''' + db_table + '''_kt_IDX ON ''' + db_table + ''' (kt);
+                        '''
 
-                logger.prt('sucess', 'step 6: added to database', 1)
-            else:
-                logger.prt('warning', 'step 6: already present', 2)
+                    cur.executescript(create)
+                    conn.commit()
+                    logger.prt('sucess', 'step 6: add table "' + db_table + '" into database', 2)
 
-            bar.next()            
-        bar.finish()
+                if not cur.fetchone():
+                    y = np.array(audio.get_array_of_samples())
+                    if audio.channels == 2:
+                        y = y.reshape((-1, 2))
 
-        if os.path.isdir(temps_dir):
-            logger.prt('info', 'Deletion of the temps folder', 2)
-            shutil.rmtree(temps_dir)
+                    sql = 'INSERT INTO ' + db_table + '''(kt,data)
+                              VALUES(?,?) '''
+                    cur = conn.cursor()
+                    task = (word, y)
+                    cur.execute(sql, task)
+                    conn.commit()
+
+                    logger.prt('sucess', 'step 6: added to database', 2)
+                else:
+                    logger.prt('warning', 'step 6: already present', 2)
+
+                if '--lv2' not in unknown and '--lv3' not in unknown:
+                    bar.next()
+
+            if '--lv2' not in unknown and '--lv3' not in unknown:
+                bar.finish()
+
+            if os.path.isdir(temps_dir):
+                logger.prt('info', 'Deletion of the temps folder', 2)
+                shutil.rmtree(temps_dir)
+
+            logger.prt('success', 'Voicepack "' + lang +
+                       '" was generated successfully (in the voices folder)')
+            input('Press enter to exit')
+
+        except KeyboardInterrupt:
+            logger.prt('warning', '\n> Interrupted by user')
 
     else:
         logger.prt('error', 'Dictionary not found')
