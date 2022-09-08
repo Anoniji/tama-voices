@@ -59,8 +59,7 @@ def check_data(db_table, word):
             return False
 
         return True
-    except Exception as e:
-        print('e>', e)
+    except Exception:
         return False
 
 
@@ -179,13 +178,13 @@ if __name__ == '__main__':
 
                     except Exception:
                         create = '''
-                    CREATE TABLE ''' + db_table + ''' (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        "kt" TEXT NOT NULL,
-                        "data" BLOB NOT NULL
-                    );
-                    CREATE INDEX ''' + db_table + '''_kt_IDX ON ''' + db_table + ''' (kt);
-                            '''
+                            CREATE TABLE ''' + db_table + ''' (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                "kt" TEXT NOT NULL,
+                                "data" BLOB NOT NULL
+                            );
+                            CREATE INDEX ''' + db_table + '''_kt_IDX ON ''' + db_table + ''' (kt);
+                        '''
 
                         cur.executescript(create)
                         conn.commit()
