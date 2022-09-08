@@ -8,18 +8,13 @@ Tools for creating voicepacks for Tama
 
 List of available languages:
 
-code   | language
--------|---------
-**de** | German
-**en** | English
-**es** | Spanish
-**fr** | French
-**it** | Italian
-**ja** | Japanese
-**ko** | Korean
-**pt** | Portuguese
-**ru** | Russian
-**zh** | Chinese
+code   | language | code   | language
+-------|----------|--------|---------
+**de** | German   |**ja**  | Japanese
+**en** | English  |**ko**  | Korean
+**es** | Spanish  |**pt**  | Portuguese
+**fr** | French   |**ru**  | Russian
+**it** | Italian  |**zh**  | Chinese
 
 ## Compilation
 
